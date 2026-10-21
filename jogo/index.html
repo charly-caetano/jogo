@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CYBER STRIKE - 2D Space Shooter</title>
+    <meta name="description"
+        content="Jogo de tiro espacial 2D retrô com naves, ondas de inimigos, pontuação, recorde e efeitos sonoros gerados por Web Audio API.">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="ambient-bg"></div>
+
+    <div id="game-container">
+        <!-- Canvas de Renderização do Jogo -->
+        <canvas id="gameCanvas" width="800" height="900"></canvas>
+
+        <!-- HUD (Heads-Up Display) Superior -->
+        <header id="hud">
+            <div class="hud-group">
+                <div class="hud-stat">
+                    <span class="stat-label">PONTUAÇÃO</span>
+                    <span id="scoreDisplay" class="stat-value">0</span>
+                </div>
+                <div class="hud-stat">
+                    <span class="stat-label">RECORDE</span>
+                    <span id="highScoreDisplay" class="stat-value highscore">0</span>
+                </div>
+            </div>
+
+            <div class="hud-group">
+                <div class="hud-stat" style="align-items: center;">
+                    <span class="stat-label">VIDAS</span>
+                    <div id="livesContainer" class="lives-container">
+                        <!-- Ícones de naves gerados dinamicamente via JS -->
+                    </div>
+                </div>
+
+                <!-- Botão de Super Bomba Nova -->
+                <button id="bombBtn" class="bomb-btn" title="Disparar Super Bomba Nova (B ou Shift)"
+                    aria-label="Disparar Super Bomba Nova">
+                    <span class="bomb-icon">💣</span>
+                    <span id="bombCount" class="bomb-count">x2</span>
+                </button>
+
+                <!-- Botão de Habilidade Clone / Duplicar -->
+                <button id="cloneBtn" class="clone-btn" title="Habilidade de Duplicar / Clones Holográficos (Tecla C)"
+                    aria-label="Ativar Clones">
+                    <span class="clone-icon">👥</span>
+                    <span id="cloneStatusText" class="clone-text">CLONE [C]</span>
+                </button>
+
+                <div class="audio-controls">
+                    <!-- Botão Música -->
+                    <button id="toggleMusicBtn" class="icon-btn" title="Alternar Música" aria-label="Alternar Música">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                        </svg>
+                    </button>
+                    <!-- Botão SFX -->
+                    <button id="toggleSfxBtn" class="icon-btn" title="Alternar Efeitos Sonoros"
+                        aria-label="Alternar Efeitos Sonoros">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                        </svg>
+                    </button>
+                    <!-- Botão Pausa -->
+                    <button id="pauseBtn" class="icon-btn" title="Pausar Jogo" aria-label="Pausar Jogo">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Barra de Informações de Fase e Progresso até o Chefão -->
+        <div id="stageInfoBar" class="stage-info-bar">
+            <div class="stage-meta">
+                <span id="stageName" class="stage-name">FASE 1: ÓRBITA TERRESTRE</span>
+                <span id="stageProgressText" class="stage-prog-text">PROGRESSO: 0%</span>
+            </div>
+            <div class="stage-prog-track">
+                <div id="stageProgressBar" class="stage-prog-fill" style="width: 0%;"></div>
+            </div>
+        </div>
+
+        <!-- Barra de Vida do Chefão (Ativada durante a Batalha de Boss) -->
+        <div id="bossBarContainer" class="boss-bar-container hidden">
+            <div class="boss-header">
+                <span class="boss-warning-icon">⚠️</span>
+                <span id="bossName" class="boss-name">CHEFÃO: DREADNOUGHT ALFA</span>
+                <span id="bossHpText" class="boss-hp-text">100%</span>
+            </div>
+            <div class="boss-hp-track">
+                <div id="bossHpFill" class="boss-hp-fill" style="width: 100%;"></div>
+            </div>
+        </div>
+
+        <!-- Alerta Vermelho de Aproximação de Chefão -->
+        <div id="bossAlarmOverlay" class="boss-alarm-overlay hidden">
+            <div class="alarm-banner">
+                <div class="alarm-title">⚠️ ALERTA DE CHEFÃO DETECTADO ⚠️</div>
+                <div id="alarmBossSubtitle" class="alarm-sub">NAVE-CAPITÂNIA SE APROXIMANDO DO SETOR!</div>
+            </div>
+        </div>
+
+        <!-- Dock Inferior de Arsenal de Armas -->
+        <div id="weaponDock" class="weapon-dock">
+            <button class="weapon-slot active" data-weapon="blaster" title="[1] Laser Blaster Padrão">
+                <span class="weapon-key">1</span>
+                <span class="weapon-name">BLASTER</span>
+                <span class="weapon-ammo">∞</span>
+            </button>
+            <button class="weapon-slot locked" data-weapon="plasma" title="[2] Canhão de Plasma Pesado">
+                <span class="weapon-key">2</span>
+                <span class="weapon-name">PLASMA</span>
+                <span class="weapon-ammo">0</span>
+            </button>
+            <button class="weapon-slot locked" data-weapon="spread" title="[3] Disparo Quádruplo">
+                <span class="weapon-key">3</span>
+                <span class="weapon-name">SPREAD</span>
+                <span class="weapon-ammo">0</span>
+            </button>
+            <button class="weapon-slot locked" data-weapon="missile" title="[4] Mísseis Teleguiados">
+                <span class="weapon-key">4</span>
+                <span class="weapon-name">MÍSSIL</span>
+                <span class="weapon-ammo">0</span>
+            </button>
+            <button class="weapon-slot locked" data-weapon="railgun" title="[5] Raio Railgun Penetrante">
+                <span class="weapon-key">5</span>
+                <span class="weapon-name">RAILGUN</span>
+                <span class="weapon-ammo">0</span>
+            </button>
+        </div>
+
+        <!-- Tela Inicial (Start Screen) -->
+        <div id="startScreen" class="overlay">
+            <h1 class="game-title">CYBER STRIKE</h1>
+            <h2 class="game-subtitle">DEFESA ESPACIAL 2D</h2>
+
+            <div class="highscore-banner">
+                <span>🏆 RECORDE ATUAL:</span>
+                <span id="startHighScore">0</span>
+            </div>
+
+            <div class="controls-card">
+                <h3>ARSENAL & COMANDOS</h3>
+                <div class="controls-grid">
+                    <div class="control-item">
+                        <span>Movimentação</span>
+                        <div>
+                            <span class="key-badge">W A S D</span>
+                            <span class="key-badge">▲ ▼ ◄ ►</span>
+                        </div>
+                    </div>
+                    <div class="control-item">
+                        <span>Atirar</span>
+                        <span class="key-badge">ESPAÇO</span>
+                    </div>
+                    <div class="control-item">
+                        <span>Trocar Arma</span>
+                        <div>
+                            <span class="key-badge">1 a 5</span> ou <span class="key-badge">Q / E</span>
+                        </div>
+                    </div>
+                    <div class="control-item">
+                        <span>Super Bomba</span>
+                        <span class="key-badge">B</span> ou <span class="key-badge">SHIFT</span>
+                    </div>
+                    <div class="control-item">
+                        <span>Duplicar / Clones</span>
+                        <span class="key-badge">C</span>
+                    </div>
+                    <div class="control-item">
+                        <span>Pausar</span>
+                        <span class="key-badge">P</span> ou <span class="key-badge">ESC</span>
+                    </div>
+                    <div class="control-item">
+                        <span>Áudio / SFX</span>
+                        <span>M / S</span>
+                    </div>
+                </div>
+
+                <div class="weapons-legend">
+                    <span class="w-tag w-plasma">[P] Plasma</span>
+                    <span class="w-tag w-spread">[S] Spread</span>
+                    <span class="w-tag w-missile">[M] Míssil</span>
+                    <span class="w-tag w-railgun">[R] Railgun</span>
+                    <span class="w-tag w-bomb">[B] Bomba</span>
+                    <span class="w-tag w-clone">[C] Clone</span>
+                </div>
+            </div>
+
+            <button id="startBtn" class="btn">
+                <span>INICIAR MISSÃO</span>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Tela de Game Over -->
+        <div id="gameOverScreen" class="overlay hidden">
+            <h2 class="gameover-title">GAME OVER</h2>
+            <div id="newRecordBadge" class="new-record-tag">⭐ NOVO RECORDE ALCANÇADO! ⭐</div>
+
+            <div class="stats-card">
+                <div class="stat-row">
+                    <span>Pontuação Final:</span>
+                    <strong id="finalScore" style="color: var(--neon-blue); font-size: 1.4rem;">0</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Melhor Recorde:</span>
+                    <strong id="finalHighScore" style="color: var(--neon-yellow); font-size: 1.3rem;">0</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Inimigos Destruídos:</span>
+                    <strong id="enemiesDestroyed" style="color: var(--neon-green); font-size: 1.2rem;">0</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Onda Alcançada:</span>
+                    <strong id="finalWave" style="color: var(--text-primary); font-size: 1.2rem;">1</strong>
+                </div>
+            </div>
+
+            <button id="restartBtn" class="btn">
+                <span>JOGAR NOVAMENTE</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                        d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Tela de Pausa -->
+        <div id="pauseScreen" class="overlay hidden">
+            <h2 class="game-title" style="font-size: 2.6rem;">JOGO PAUSADO</h2>
+            <p style="color: var(--text-muted); margin-bottom: 24px; font-size: 1.1rem;">
+                Pressione <span class="key-badge">P</span> ou <span class="key-badge">ESC</span> para continuar.
+            </p>
+
+            <div style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;">
+                <button id="resumeBtn" class="btn">
+                    <span>CONTINUAR</span>
+                </button>
+                <button id="quitBtn" class="btn btn-secondary">
+                    <span>REINICIAR</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tela de Fase Concluída (Stage Clear) -->
+        <div id="stageClearScreen" class="overlay hidden">
+            <h2 class="stageclear-title">FASE CONCLUÍDA!</h2>
+            <p id="stageClearSubtitle" class="stageclear-subtitle">SETOR LIBERADO COM SUCESSO</p>
+
+            <div class="stats-card">
+                <div class="stat-row">
+                    <span>Bônus de Vitória:</span>
+                    <strong id="stageBonusPoints" style="color: var(--neon-yellow); font-size: 1.3rem;">+3.000
+                        PTS</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Suprimentos de Batalha:</span>
+                    <strong style="color: var(--neon-green);">+1 VIDA & ESCUDO RECUPERADOS</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Reforço de Arsenal:</span>
+                    <strong style="color: var(--neon-blue);">RECARGA DE MUNIÇÃO</strong>
+                </div>
+            </div>
+
+            <button id="nextStageBtn" class="btn">
+                <span>AVANÇAR PARA A PRÓXIMA FASE</span>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M5 13h11.86l-5.43 5.43 1.42 1.42L21.14 12l-8.29-8.29-1.42 1.42L16.86 11H5v2z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Tela de Vitória Suprema (Campanha Concluída) -->
+        <div id="victoryScreen" class="overlay hidden">
+            <h1 class="victory-title">VITÓRIA SUPREMA!</h1>
+            <p class="victory-subtitle">TODOS OS SETORES FORAM LIBERTADOS DO DOMÍNIO INVASOR</p>
+
+            <div class="stats-card">
+                <div class="stat-row">
+                    <span>Pontuação Final:</span>
+                    <strong id="victoryFinalScore" style="color: var(--neon-yellow); font-size: 1.5rem;">0</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Inimigos & Chefões Destruídos:</span>
+                    <strong id="victoryKills" style="color: var(--neon-green); font-size: 1.3rem;">0</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Classificação Militar:</span>
+                    <strong style="color: var(--neon-blue); font-size: 1.15rem;">Ás Estelar Supremo ★★★</strong>
+                </div>
+            </div>
+
+            <button id="victoryRestartBtn" class="btn">
+                <span>JOGAR NOVAMENTE (NOVO CICLO)</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                        d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Banner de Salto de Hiperespaço / Passagem Direta de Fase -->
+        <div id="warpOverlay" class="warp-overlay hidden">
+            <div class="warp-content">
+                <div class="warp-title">🚀 SALTO DE HIPERESPAÇO ATIVADO!</div>
+                <div id="warpSubtitle" class="warp-sub">AVANÇANDO DIRETAMENTE PARA O PRÓXIMO SETOR...</div>
+                <div id="warpBonus" class="warp-bonus">+3.000 PTS | ESCUDO RESTAURADO</div>
+            </div>
+        </div>
+
+        <!-- Controles Móveis em Tela (Aparece em dispositivos touch / telas menores) -->
+        <div id="mobile-controls">
+            <div class="touch-dpad">
+                <div></div>
+                <button id="btnTouchUp" class="touch-btn">▲</button>
+                <div></div>
+                <button id="btnTouchLeft" class="touch-btn">◄</button>
+                <div></div>
+                <button id="btnTouchRight" class="touch-btn">►</button>
+                <div></div>
+                <button id="btnTouchDown" class="touch-btn">▼</button>
+                <div></div>
+            </div>
+
+            <div class="touch-actions">
+                <div class="touch-aux-btns">
+                    <button id="btnTouchWeapon" class="touch-aux-btn" title="Alternar Arma">ARMA</button>
+                    <button id="btnTouchClone" class="touch-aux-btn clone-touch" title="Ativar Clones">👥</button>
+                    <button id="btnTouchBomb" class="touch-aux-btn bomb-touch" title="Soltar Bomba">💣</button>
+                </div>
+                <button id="btnTouchFire" class="touch-fire-btn">FOGO</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts do Jogo -->
+    <script src="audio.js"></script>
+    <script src="game.js"></script>
+</body>
+
+</html>
